@@ -1,107 +1,116 @@
+%%writefile app15.py
 import streamlit as st
 import pandas as pd
+import os
+os.system('pip install mysql-connector-python')
 
-# Inicializar los DataFrames vacíos si no existen
-if "contabilidad" not in st.session_state:
-    st.session_state.contabilidad = pd.DataFrame(columns=["Fecha", "Concepto", "Monto", "Tipo"])
-if "compras" not in st.session_state:
-    st.session_state.compras = pd.DataFrame(columns=["Proveedor", "Producto", "Cantidad", "Costo Total"])
-if "ventas" not in st.session_state:
-    st.session_state.ventas = pd.DataFrame(columns=["Cliente", "Producto", "Cantidad", "Precio Total"])
-if "inventario" not in st.session_state:
-    st.session_state.inventario = pd.DataFrame(columns=["Producto", "Stock", "Ubicación"])
-if "crm" not in st.session_state:
-    st.session_state.crm = pd.DataFrame(columns=["Cliente", "Interacción", "Estado"])
+# Función para insertar en la base de datos
+def insertar_en_bd(modulo, datos):
+    try:
+        conexion = mysql.connector.connect(
+            host="localhost",
+            user="root",  # ⬅️ CAMBIA esto si es necesario
+            password="tu_contraseña",  # ⬅️ CAMBIA esto también
+            database="cripto"
+        )
+        cursor = conexion.cursor()
 
-# Función para agregar datos a un DataFrame
+        if modulo == "Usuario":
+            cursor.execute("INSERT INTO Usuario (Fecha, Nombre, Apellidos, Usuario) VALUES (%s, %s, %s, %s)",
+                           (datos["Fecha"].strftime('%Y-%m-%d'), datos["Nombre"], datos["Apellidos"], datos["Usuario"]))
+        elif modulo == "Consultas":
+            cursor.execute("INSERT INTO Consultas (Usuario, Fecha, Asunto, Mensaje) VALUES (%s, %s, %s, %s)",
+                           (datos["Usuario"], datos["Fecha"].strftime('%Y-%m-%d'), datos["Asunto"], datos["Mensaje"]))
+        elif modulo == "Plan":
+            cursor.execute("INSERT INTO Plan (Planes, PeriodoDePrueba, PrecioTotal) VALUES (%s, %s, %s)",
+                           (datos["Planes"], datos["PeriodoDePrueba"], datos["PrecioTotal"]))
+        elif modulo == "Prediccion":
+            cursor.execute("INSERT INTO Prediccion (Fecha, PrecioPredicho, ModeloUsado, Confianza) VALUES (%s, %s, %s, %s)",
+                           (datos["Fecha"].strftime('%Y-%m-%d'), datos["PrecioPredicho"], datos["ModeloUsado"], datos["Confianza"]))
+        elif modulo == "Suscripcion":
+            cursor.execute("INSERT INTO Suscripcion (Usuario, FechaInicio, FechaFin) VALUES (%s, %s, %s)",
+                           (datos["Usuario"], datos["FechaInicio"].strftime('%Y-%m-%d'), datos["FechaFin"].strftime('%Y-%m-%d')))
+
+        conexion.commit()
+        cursor.close()
+        conexion.close()
+
+    except mysql.connector.Error as err:
+        st.error(f"Error al insertar en base de datos: {err}")
+
+# Inicializar los DataFrames vacíos
+modulos = ["Usuario", "Consultas", "Plan", "Prediccion", "Suscripcion"]
+for m in modulos:
+    if m not in st.session_state:
+        st.session_state[m] = pd.DataFrame()
+
+# Agregar a sesión y base de datos
 def agregar_dato(modulo, datos):
-    if modulo in st.session_state:
-        st.session_state[modulo] = pd.concat([st.session_state[modulo], pd.DataFrame([datos])], ignore_index=True)
+    st.session_state[modulo] = pd.concat([st.session_state[modulo], pd.DataFrame([datos])], ignore_index=True)
+    insertar_en_bd(modulo, datos)
 
-# Interfaz gráfica con Streamlit
-st.title("Simulación de un ERP-CRM")
-st.sidebar.title("Selecciona un Módulo para Agregar Datos")
+# Interfaz gráfica
+st.title("Metabyte")
+modulo = st.sidebar.selectbox("Selecciona un módulo", modulos)
 
-modulo = st.sidebar.selectbox("Selecciona un módulo", ["Contabilidad", "Compras", "Ventas", "Inventario", "CRM"])
+if modulo == "Usuario":
+    st.subheader("Agregar Usuario")
+    with st.form("form_usuario"):
+        Fecha = st.date_input("Fecha de nacimiento")
+        Nombre = st.text_input("Nombre")
+        Apellidos = st.text_input("Apellidos")
+        Usuario = st.text_input("Usuario")
+        if st.form_submit_button("Agregar"):
+            datos = {"Fecha": Fecha, "Nombre": Nombre, "Apellidos": Apellidos, "Usuario": Usuario}
+            agregar_dato("Usuario", datos)
+            st.success("Usuario agregado")
 
-if modulo == "Contabilidad":
-    st.subheader("Agregar Registro Contable")
-    with st.form(key="contabilidad_form"):
-        fecha = st.date_input("Fecha")
-        concepto = st.text_input("Concepto")
-        monto = st.number_input("Monto", step=100.0)
-        tipo = st.selectbox("Tipo", ["Ingreso", "Egreso"])
-        submit_button = st.form_submit_button("Agregar Registro")
+elif modulo == "Consultas":
+    st.subheader("Agregar Consulta")
+    with st.form("form_consulta"):
+        Usuario = st.text_input("Usuario")
+        Fecha = st.date_input("Fecha")
+        Asunto = st.text_input("Asunto")
+        Mensaje = st.text_area("Mensaje")
+        if st.form_submit_button("Enviar"):
+            datos = {"Usuario": Usuario, "Fecha": Fecha, "Asunto": Asunto, "Mensaje": Mensaje}
+            agregar_dato("Consultas", datos)
+            st.success("Consulta enviada")
 
-    if submit_button:
-        agregar_dato("contabilidad", {"Fecha": fecha, "Concepto": concepto, "Monto": monto, "Tipo": tipo})
-        st.success("Registro agregado con éxito")
+elif modulo == "Plan":
+    st.subheader("Agregar Plan")
+    with st.form("form_plan"):
+        Planes = st.selectbox("Tipo de Plan", ["Plan FREE", "Plan ANALISTA", "Plan TRADER", "Plan VIP"])
+        Periodo = st.text_input("Periodo de prueba")
+        Precio = st.text_input("Precio Total")
+        if st.form_submit_button("Agregar"):
+            datos = {"Planes": Planes, "PeriodoDePrueba": Periodo, "PrecioTotal": Precio}
+            agregar_dato("Plan", datos)
+            st.success("Plan registrado")
 
-    st.subheader("Registros Contables")
-    st.dataframe(st.session_state.contabilidad)
+elif modulo == "Prediccion":
+    st.subheader("Agregar Predicción")
+    with st.form("form_prediccion"):
+        Fecha = st.date_input("Fecha")
+        Precio = st.number_input("Precio predicho")
+        Modelo = st.text_input("Modelo usado")
+        Confianza = st.text_input("Confianza")
+        if st.form_submit_button("Agregar"):
+            datos = {"Fecha": Fecha, "PrecioPredicho": Precio, "ModeloUsado": Modelo, "Confianza": Confianza}
+            agregar_dato("Prediccion", datos)
+            st.success("Predicción guardada")
 
-elif modulo == "Compras":
-    st.subheader("Agregar Orden de Compra")
-    with st.form(key="compras_form"):
-        proveedor = st.text_input("Proveedor")
-        producto = st.text_input("Producto")
-        cantidad = st.number_input("Cantidad", step=1, min_value=1)
-        costo_total = st.number_input("Costo Total", step=100.0)
-        submit_button = st.form_submit_button("Agregar Orden")
+elif modulo == "Suscripcion":
+    st.subheader("Agregar Suscripción")
+    with st.form("form_suscripcion"):
+        Usuario = st.text_input("Usuario")
+        FechaInicio = st.date_input("Fecha de Inicio")
+        FechaFin = st.date_input("Fecha de Fin")
+        if st.form_submit_button("Agregar"):
+            datos = {"Usuario": Usuario, "FechaInicio": FechaInicio, "FechaFin": FechaFin}
+            agregar_dato("Suscripcion", datos)
+            st.success("Suscripción añadida")
 
-    if submit_button:
-        agregar_dato("compras", {"Proveedor": proveedor, "Producto": producto, "Cantidad": cantidad, "Costo Total": costo_total})
-        st.success("Orden de compra agregada con éxito")
-
-    st.subheader("Órdenes de Compra")
-    st.dataframe(st.session_state.compras)
-
-elif modulo == "Ventas":
-    st.subheader("Agregar Venta")
-    with st.form(key="ventas_form"):
-        cliente = st.text_input("Cliente")
-        producto = st.text_input("Producto")
-        cantidad = st.number_input("Cantidad", step=1, min_value=1)
-        precio_total = st.number_input("Precio Total", step=100.0)
-        submit_button = st.form_submit_button("Agregar Venta")
-
-    if submit_button:
-        agregar_dato("ventas", {"Cliente": cliente, "Producto": producto, "Cantidad": cantidad, "Precio Total": precio_total})
-        st.success("Venta agregada con éxito")
-
-    st.subheader("Ventas Registradas")
-    st.dataframe(st.session_state.ventas)
-
-elif modulo == "Inventario":
-    st.subheader("Agregar Inventario")
-    with st.form(key="inventario_form"):
-        producto = st.text_input("Producto")
-        stock = st.number_input("Stock", step=1, min_value=0)
-        ubicacion = st.text_input("Ubicación")
-        submit_button = st.form_submit_button("Agregar Inventario")
-
-    if submit_button:
-        agregar_dato("inventario", {"Producto": producto, "Stock": stock, "Ubicación": ubicacion})
-        st.success("Inventario agregado con éxito")
-
-    st.subheader("Inventario Actual")
-    st.dataframe(st.session_state.inventario)
-
-elif modulo == "CRM":
-    st.subheader("Agregar Cliente CRM")
-    with st.form(key="crm_form"):
-        cliente = st.text_input("Cliente")
-        interaccion = st.selectbox("Interacción", ["Llamada", "Reunión", "Email", "Demo"])
-        estado = st.selectbox("Estado", ["Interesado", "Negociando", "Cerrado", "Abierto"])
-        submit_button = st.form_submit_button("Agregar Cliente CRM")
-
-    if submit_button:
-        agregar_dato("crm", {"Cliente": cliente, "Interacción": interaccion, "Estado": estado})
-        st.success("Cliente agregado al CRM")
-
-    st.subheader("Clientes en CRM")
-    st.dataframe(st.session_state.crm)
-
-
-if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+# Mostrar datos actuales
+st.subheader("Registros actuales")
+st.dataframe(st.session_state[modulo])
