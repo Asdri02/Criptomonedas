@@ -1,0 +1,59 @@
+from flask import Flask, request, jsonify
+import mysql.connector
+from datetime import datetime
+
+app = Flask(__name__)
+
+# Configuración de conexión a tu base de datos
+db_config = {
+    "host": "localhost",             
+    "user": "root",      
+    "password": "1234",     
+    "database": "Local instance MySQL80(cripto)"      
+}
+
+@app.route('/api/registro_usuario', methods=['POST'])
+def registrar_usuario():
+    datos = request.json
+
+    nombre = datos.get('nombre')
+    email = datos.get('email')
+    password = datos.get('password')
+    id_plan = datos.get('id_plan')  # El plan al que el cliente se suscribe
+
+    if not nombre or not email or not password or not id_plan:
+        return jsonify({"error": "Faltan datos obligatorios"}), 400
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+
+        # Insertar nuevo usuario
+        query_usuario = """
+            INSERT INTO Usuario (nombre, email, contraseña, fecha_registro)
+            VALUES (%s, %s, %s, %s)
+        """
+        cursor.execute(query_usuario, (nombre, email, password, datetime.now()))
+        id_usuario = cursor.lastrowid
+
+        # Crear suscripción asociada al plan
+        query_suscripcion = """
+            INSERT INTO Suscripcion (id_usuario, id_plan, fecha_inicio, fecha_fin)
+            VALUES (%s, %s, %s, %s)
+        """
+        fecha_inicio = datetime.now()
+        fecha_fin = datetime.now().replace(year=datetime.now().year + 1)
+        cursor.execute(query_suscripcion, (id_usuario, id_plan, fecha_inicio, fecha_fin))
+
+        conn.commit()
+        return jsonify({"mensaje": "Usuario y suscripción registrados"}), 201
+
+    except mysql.connector.Error as e:
+        return jsonify({"error": f"Error en la base de datos: {e}"}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
+if __name__ == '__main__':
+    app.run(port=5000, debug=True)
