@@ -1,59 +1,107 @@
-from flask import Flask, request, jsonify
-import mysql.connector
-from datetime import datetime
+import streamlit as st
+import pandas as pd
 
-app = Flask(__name__)
+# Inicializar los DataFrames vacíos si no existen
+if "contabilidad" not in st.session_state:
+    st.session_state.contabilidad = pd.DataFrame(columns=["Fecha", "Concepto", "Monto", "Tipo"])
+if "compras" not in st.session_state:
+    st.session_state.compras = pd.DataFrame(columns=["Proveedor", "Producto", "Cantidad", "Costo Total"])
+if "ventas" not in st.session_state:
+    st.session_state.ventas = pd.DataFrame(columns=["Cliente", "Producto", "Cantidad", "Precio Total"])
+if "inventario" not in st.session_state:
+    st.session_state.inventario = pd.DataFrame(columns=["Producto", "Stock", "Ubicación"])
+if "crm" not in st.session_state:
+    st.session_state.crm = pd.DataFrame(columns=["Cliente", "Interacción", "Estado"])
 
-# Configuración de conexión a tu base de datos
-db_config = {
-    "host": "localhost",             
-    "user": "root",      
-    "password": "1234",     
-    "database": "Local instance MySQL80(cripto)"      
-}
+# Función para agregar datos a un DataFrame
+def agregar_dato(modulo, datos):
+    if modulo in st.session_state:
+        st.session_state[modulo] = pd.concat([st.session_state[modulo], pd.DataFrame([datos])], ignore_index=True)
 
-@app.route('/api/registro_usuario', methods=['POST'])
-def registrar_usuario():
-    datos = request.json
+# Interfaz gráfica con Streamlit
+st.title("Simulación de un ERP-CRM")
+st.sidebar.title("Selecciona un Módulo para Agregar Datos")
 
-    nombre = datos.get('nombre')
-    email = datos.get('email')
-    password = datos.get('password')
-    id_plan = datos.get('id_plan')  # El plan al que el cliente se suscribe
+modulo = st.sidebar.selectbox("Selecciona un módulo", ["Contabilidad", "Compras", "Ventas", "Inventario", "CRM"])
 
-    if not nombre or not email or not password or not id_plan:
-        return jsonify({"error": "Faltan datos obligatorios"}), 400
+if modulo == "Contabilidad":
+    st.subheader("Agregar Registro Contable")
+    with st.form(key="contabilidad_form"):
+        fecha = st.date_input("Fecha")
+        concepto = st.text_input("Concepto")
+        monto = st.number_input("Monto", step=100.0)
+        tipo = st.selectbox("Tipo", ["Ingreso", "Egreso"])
+        submit_button = st.form_submit_button("Agregar Registro")
 
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
+    if submit_button:
+        agregar_dato("contabilidad", {"Fecha": fecha, "Concepto": concepto, "Monto": monto, "Tipo": tipo})
+        st.success("Registro agregado con éxito")
 
-        # Insertar nuevo usuario
-        query_usuario = """
-            INSERT INTO Usuario (nombre, email, contraseña, fecha_registro)
-            VALUES (%s, %s, %s, %s)
-        """
-        cursor.execute(query_usuario, (nombre, email, password, datetime.now()))
-        id_usuario = cursor.lastrowid
+    st.subheader("Registros Contables")
+    st.dataframe(st.session_state.contabilidad)
 
-        # Crear suscripción asociada al plan
-        query_suscripcion = """
-            INSERT INTO Suscripcion (id_usuario, id_plan, fecha_inicio, fecha_fin)
-            VALUES (%s, %s, %s, %s)
-        """
-        fecha_inicio = datetime.now()
-        fecha_fin = datetime.now().replace(year=datetime.now().year + 1)
-        cursor.execute(query_suscripcion, (id_usuario, id_plan, fecha_inicio, fecha_fin))
+elif modulo == "Compras":
+    st.subheader("Agregar Orden de Compra")
+    with st.form(key="compras_form"):
+        proveedor = st.text_input("Proveedor")
+        producto = st.text_input("Producto")
+        cantidad = st.number_input("Cantidad", step=1, min_value=1)
+        costo_total = st.number_input("Costo Total", step=100.0)
+        submit_button = st.form_submit_button("Agregar Orden")
 
-        conn.commit()
-        return jsonify({"mensaje": "Usuario y suscripción registrados"}), 201
+    if submit_button:
+        agregar_dato("compras", {"Proveedor": proveedor, "Producto": producto, "Cantidad": cantidad, "Costo Total": costo_total})
+        st.success("Orden de compra agregada con éxito")
 
-    except mysql.connector.Error as e:
-        return jsonify({"error": f"Error en la base de datos: {e}"}), 500
+    st.subheader("Órdenes de Compra")
+    st.dataframe(st.session_state.compras)
 
-    finally:
-        cursor.close()
-        conn.close()
+elif modulo == "Ventas":
+    st.subheader("Agregar Venta")
+    with st.form(key="ventas_form"):
+        cliente = st.text_input("Cliente")
+        producto = st.text_input("Producto")
+        cantidad = st.number_input("Cantidad", step=1, min_value=1)
+        precio_total = st.number_input("Precio Total", step=100.0)
+        submit_button = st.form_submit_button("Agregar Venta")
+
+    if submit_button:
+        agregar_dato("ventas", {"Cliente": cliente, "Producto": producto, "Cantidad": cantidad, "Precio Total": precio_total})
+        st.success("Venta agregada con éxito")
+
+    st.subheader("Ventas Registradas")
+    st.dataframe(st.session_state.ventas)
+
+elif modulo == "Inventario":
+    st.subheader("Agregar Inventario")
+    with st.form(key="inventario_form"):
+        producto = st.text_input("Producto")
+        stock = st.number_input("Stock", step=1, min_value=0)
+        ubicacion = st.text_input("Ubicación")
+        submit_button = st.form_submit_button("Agregar Inventario")
+
+    if submit_button:
+        agregar_dato("inventario", {"Producto": producto, "Stock": stock, "Ubicación": ubicacion})
+        st.success("Inventario agregado con éxito")
+
+    st.subheader("Inventario Actual")
+    st.dataframe(st.session_state.inventario)
+
+elif modulo == "CRM":
+    st.subheader("Agregar Cliente CRM")
+    with st.form(key="crm_form"):
+        cliente = st.text_input("Cliente")
+        interaccion = st.selectbox("Interacción", ["Llamada", "Reunión", "Email", "Demo"])
+        estado = st.selectbox("Estado", ["Interesado", "Negociando", "Cerrado", "Abierto"])
+        submit_button = st.form_submit_button("Agregar Cliente CRM")
+
+    if submit_button:
+        agregar_dato("crm", {"Cliente": cliente, "Interacción": interaccion, "Estado": estado})
+        st.success("Cliente agregado al CRM")
+
+    st.subheader("Clientes en CRM")
+    st.dataframe(st.session_state.crm)
+
 
 if __name__ == '__main__':
     app.run(port=5000, debug=True)
